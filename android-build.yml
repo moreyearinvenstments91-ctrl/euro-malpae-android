@@ -1,47 +1,46 @@
 name: Build EURO MALPAE Android app
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [ "main" ]
+workflow_dispatch:
+push:
+branches: ["main"]
 
 permissions:
-  contents: read
+contents: read
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
+build:
+runs-on: ubuntu-latest
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+steps:
+  - name: Checkout source
+    uses: actions/checkout@v4
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+  - name: Set up Java
+    uses: actions/setup-java@v5
+    with:
+      distribution: temurin
+      java-version: "17"
 
-      - name: Install Android SDK platform
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+  - name: Set up Android SDK
+    uses: android-actions/setup-android@v3
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+  - name: Install Android SDK platform
+    run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
+  - name: Set up Gradle
+    uses: gradle/actions/setup-gradle@v4
 
-      - name: Build release APK and AAB (unsigned)
-        run: gradle --no-daemon assembleRelease bundleRelease
+  - name: Build Android APK and AAB
+    run: |
+      gradle --no-daemon -p app assembleDebug assembleRelease bundleRelease
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: euro-malpae-android-builds
-          path: |
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/bundle/release/*.aab
-          if-no-files-found: error
+  - name: Upload build artifacts
+    uses: actions/upload-artifact@v4
+    with:
+      name: euro-malpae-android-builds
+      path: |
+        app/build/outputs/apk/debug/*.apk
+        app/build/outputs/apk/release/*.apk
+        app/build/outputs/bundle/release/*.aab
+      if-no-files-found: error
