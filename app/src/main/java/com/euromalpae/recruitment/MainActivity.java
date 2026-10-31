@@ -42,14 +42,11 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
-        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
-        CookieManager cookieManager = CookieManager.getInstance();
-        cookieManager.setAcceptCookie(true);
-        cookieManager.setAcceptThirdPartyCookies(webView, true);
+        CookieManager cookies = CookieManager.getInstance();
+        cookies.setAcceptCookie(true);
+        cookies.setAcceptThirdPartyCookies(webView, true);
 
-        // Keep EURO MALPAE website inside the application.
-        // Open WhatsApp and other external links in their respective apps.
         webView.setWebViewClient(new WebViewClient() {
 
             @Override
@@ -57,7 +54,7 @@ public class MainActivity extends Activity {
                     WebView view,
                     WebResourceRequest request) {
 
-                return handleUrl(request.getUrl().toString());
+                return handleUrl(request.getUrl());
             }
 
             @Override
@@ -65,11 +62,11 @@ public class MainActivity extends Activity {
                     WebView view,
                     String url) {
 
-                return handleUrl(url);
+                return handleUrl(Uri.parse(url));
             }
         });
 
-        // FILE UPLOAD SUPPORT
+        // File upload support
         webView.setWebChromeClient(new WebChromeClient() {
 
             @Override
@@ -89,7 +86,6 @@ public class MainActivity extends Activity {
 
                     if (params.getMode() ==
                             FileChooserParams.MODE_OPEN_MULTIPLE) {
-
                         intent.putExtra(
                                 Intent.EXTRA_ALLOW_MULTIPLE,
                                 true
@@ -102,7 +98,6 @@ public class MainActivity extends Activity {
                     );
 
                 } catch (Exception e) {
-
                     fileCallback.onReceiveValue(null);
                     fileCallback = null;
 
@@ -117,7 +112,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        // PDF AND ZIP DOWNLOAD SUPPORT
+        // PDF and ZIP downloads
         webView.setDownloadListener(new DownloadListener() {
 
             @Override
@@ -137,48 +132,82 @@ public class MainActivity extends Activity {
             }
         });
 
-        // Always load the live Render website.
         webView.loadUrl(WEBSITE_URL);
     }
 
-    // HANDLE WHATSAPP AND EXTERNAL LINKS
-    private boolean handleUrl(String url) {
+    // Handle internal and external links
+    private boolean handleUrl(Uri uri) {
 
-        Uri uri = Uri.parse(url);
         String scheme = uri.getScheme();
+        String host = uri.getHost();
 
         if (scheme == null) {
             return false;
         }
 
-        if ("https".equalsIgnoreCase(scheme) ||
-                "http".equalsIgnoreCase(scheme)) {
+        // Keep EURO MALPAE website inside the APK
+        if (("https".equalsIgnoreCase(scheme) ||
+             "http".equalsIgnoreCase(scheme))
+                && host != null
+                && host.equalsIgnoreCase(
+                    "maple-ncubez-recruitment.onrender.com")) {
 
-            String host = uri.getHost();
+            return false;
+        }
 
-            if (host != null &&
-                    (host.equalsIgnoreCase("maple-ncubez-recruitment.onrender.com") ||
-                     host.equalsIgnoreCase("www.maple-ncubez-recruitment.onrender.com"))) {
+        // WhatsApp ordinary and WhatsApp Business
+        if ("https".equalsIgnoreCase(scheme)
+                && host != null
+                && (host.equalsIgnoreCase("wa.me")
+                || host.equalsIgnoreCase("www.wa.me")
+                || host.equalsIgnoreCase("api.whatsapp.com")
+                || host.equalsIgnoreCase("www.whatsapp.com"))) {
 
-                return false;
-            }
-
-            openExternalLink(uri);
+            openWhatsApp(uri);
             return true;
         }
 
-        if ("mailto".equalsIgnoreCase(scheme) ||
-                "tel".equalsIgnoreCase(scheme) ||
-                "intent".equalsIgnoreCase(scheme)) {
+        // Other external links
+        if ("https".equalsIgnoreCase(scheme)
+                || "http".equalsIgnoreCase(scheme)
+                || "mailto".equalsIgnoreCase(scheme)
+                || "tel".equalsIgnoreCase(scheme)) {
 
-            openExternalLink(uri);
+            openExternal(uri);
             return true;
         }
 
         return false;
     }
 
-    private void openExternalLink(Uri uri) {
+    // Let Android choose WhatsApp or WhatsApp Business
+    private void openWhatsApp(Uri uri) {
+
+        try {
+
+            Intent intent = new Intent(
+                    Intent.ACTION_VIEW,
+                    uri
+            );
+
+            startActivity(
+                    Intent.createChooser(
+                            intent,
+                            "Open with WhatsApp"
+                    )
+            );
+
+        } catch (Exception e) {
+
+            Toast.makeText(
+                    this,
+                    "Unable to open WhatsApp. Check that WhatsApp is installed.",
+                    Toast.LENGTH_LONG
+            ).show();
+        }
+    }
+
+    private void openExternal(Uri uri) {
 
         try {
 
@@ -193,13 +222,13 @@ public class MainActivity extends Activity {
 
             Toast.makeText(
                     this,
-                    "No application available to open this link",
+                    "No application available to open this link.",
                     Toast.LENGTH_SHORT
             ).show();
         }
     }
 
-    // DOWNLOAD FILES TO THE PHONE
+    // Download files
     private void downloadFile(
             String url,
             String userAgent,
@@ -223,7 +252,8 @@ public class MainActivity extends Activity {
             );
 
             request.setNotificationVisibility(
-                    DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+                    DownloadManager.Request
+                    .VISIBILITY_VISIBLE_NOTIFY_COMPLETED
             );
 
             request.setDestinationInExternalPublicDir(
@@ -235,34 +265,27 @@ public class MainActivity extends Activity {
                 request.setMimeType(mimeType);
             }
 
-            String cookies =
+            String cookie =
                     CookieManager.getInstance().getCookie(url);
 
-            if (cookies != null && !cookies.isEmpty()) {
-                request.addRequestHeader("Cookie", cookies);
+            if (cookie != null) {
+                request.addRequestHeader("Cookie", cookie);
             }
 
-            if (userAgent != null && !userAgent.isEmpty()) {
+            if (userAgent != null) {
                 request.addRequestHeader("User-Agent", userAgent);
             }
 
-            DownloadManager downloadManager =
+            DownloadManager manager =
                     (DownloadManager) getSystemService(
                             Context.DOWNLOAD_SERVICE
                     );
 
-            if (downloadManager == null) {
-
-                Toast.makeText(
-                        this,
-                        "Download service unavailable",
-                        Toast.LENGTH_LONG
-                ).show();
-
-                return;
+            if (manager == null) {
+                throw new Exception("Download service unavailable");
             }
 
-            downloadManager.enqueue(request);
+            manager.enqueue(request);
 
             Toast.makeText(
                     this,
@@ -280,7 +303,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    // FILE UPLOAD RESULT
+    // File upload result
     @Override
     protected void onActivityResult(
             int requestCode,
@@ -293,8 +316,8 @@ public class MainActivity extends Activity {
                 data
         );
 
-        if (requestCode == FILE_CHOOSER_REQUEST &&
-                fileCallback != null) {
+        if (requestCode == FILE_CHOOSER_REQUEST
+                && fileCallback != null) {
 
             Uri[] results = null;
 
@@ -324,7 +347,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    // BACK BUTTON SUPPORT
+    // Back navigation
     @Override
     public void onBackPressed() {
 
