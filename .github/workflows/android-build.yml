@@ -24,11 +24,38 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Check Android Manifest
+      - name: Clean Android Manifest
         run: |
-          echo "Checking AndroidManifest.xml..."
-          test -f app/src/main/AndroidManifest.xml
-          cat -n app/src/main/AndroidManifest.xml
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("app/src/main/AndroidManifest.xml")
+          data = p.read_bytes()
+
+          # Remove UTF-8 BOM and leading whitespace
+          data = data.lstrip(b"\xef\xbb\xbf \t\r\n")
+
+          # Keep only the first XML declaration
+          declaration = b'<?xml'
+          first = data.find(declaration)
+
+          if first > 0:
+              data = data[first:]
+
+          # Remove duplicate XML declarations
+          marker = b'<?xml'
+          first = data.find(marker)
+          if first >= 0:
+              before = data[:first + 1]
+              after = data[first + 1:]
+              after = after.replace(marker, b'')
+              data = before + after
+
+          p.write_bytes(data)
+
+          print("Cleaned manifest:")
+          print(p.read_text(encoding="utf-8"))
+          PY
 
       - name: Validate Manifest XML
         run: |
@@ -36,39 +63,19 @@ jobs:
           sudo apt-get install -y libxml2-utils
           xmllint --noout app/src/main/AndroidManifest.xml
 
-      - name: Diagnose Android Manifest
-        run: |
-          gradle --no-daemon :app:processDebugMainManifest --stacktrace --info
-
       - name: Build Debug APK
-        if: success()
         run: gradle --no-daemon assembleDebug
 
       - name: Build Release APK
-        if: success()
         run: gradle --no-daemon assembleRelease
 
-      - name: Build Android App Bundle
-        if: success()
+      - name: Build Release AAB
         run: gradle --no-daemon bundleRelease
 
-      - name: Upload Debug APK
-        if: success()
+      - name: Upload APK and AAB
         uses: actions/upload-artifact@v4
         with:
-          name: EURO-MALPAE-Debug-APK
-          path: app/build/outputs/apk/debug/*.apk
-
-      - name: Upload Release APK
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: EURO-MALPAE-Release-APK
-          path: app/build/outputs/apk/release/*.apk
-
-      - name: Upload Release AAB
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: EURO-MALPAE-Release-AAB
-          path: app/build/outputs/bundle/release/*.aab
+          name: EURO-MALPAE-ANDROID
+          path: |
+            app/build/outputs/apk/**/*.apk
+            app/build/outputs/bundle/**/*.aab
